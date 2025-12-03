@@ -47,7 +47,6 @@ class Vertex {
 class Face {
     constructor(vertexIndices, texCoords) {
         this.vertexIndices = vertexIndices;
-        //Массив текстурных координат, соответствующих каждой вершине грани.
         this.texCoords = texCoords;
     }
 }
@@ -372,8 +371,8 @@ class Lighting3DViewer {
                 if (lambda1 >= 0 && lambda2 >= 0 && lambda3 >= 0) {
                     const z = lambda1 * screenV1.z + lambda2 * screenV2.z + lambda3 * screenV3.z;
                     
-                    // Убрана проверка Z-буфера, просто рисуем пиксель
-                    if (z > -10) { // Проверка только на минимальную глубину
+                   
+                    if (z > -10) { 
                         let color;
                         
                         if (this.shadingMode === 'gouraud') {
@@ -432,7 +431,7 @@ class Lighting3DViewer {
     render() {
         this.ctx.fillStyle = '#1a1a2e';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        // Убран вызов clearZBuffer()
+       
         
         const model = this.models[this.currentModel];
         document.getElementById('faceCount').textContent = model.faces.length;

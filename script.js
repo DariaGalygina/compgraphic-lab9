@@ -2,12 +2,14 @@ class Point3D {
     constructor(x, y, z) {
         this.x = x; this.y = y; this.z = z;
     }
+   
     subtract(other) {
         return new Point3D(this.x - other.x, this.y - other.y, this.z - other.z);
     }
     add(other) {
         return new Point3D(this.x + other.x, this.y + other.y, this.z + other.z);
     }
+
     cross(other) {
         return new Point3D(
             this.y * other.z - this.z * other.y,
@@ -15,16 +17,20 @@ class Point3D {
             this.x * other.y - this.y * other.x
         );
     }
+
     dot(other) {
         return this.x * other.x + this.y * other.y + this.z * other.z;
     }
+
     length() {
         return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
     }
+
     normalize() {
         const len = this.length();
         return len > 0 ? new Point3D(this.x/len, this.y/len, this.z/len) : this;
     }
+   
     multiply(scalar) {
         return new Point3D(this.x * scalar, this.y * scalar, this.z * scalar);
     }
@@ -41,6 +47,7 @@ class Vertex {
 class Face {
     constructor(vertexIndices, texCoords) {
         this.vertexIndices = vertexIndices;
+        //Массив текстурных координат, соответствующих каждой вершине грани.
         this.texCoords = texCoords;
     }
 }
@@ -52,6 +59,7 @@ class Model3D {
         this.calculateNormals();
     }
     
+
     calculateNormals() {
         this.vertices.forEach(v => v.normal = new Point3D(0, 0, 0));
         this.faces.forEach(face => {
@@ -76,15 +84,11 @@ class Lighting3DViewer {
         this.shadingMode = 'gouraud';
         this.enableTexturing = false;
         this.textureType = 'checker';
-        
         this.lightPosition = new Point3D(2, 2, 2);
         this.objectColor = { r: 0.8, g: 0.6, b: 0.4 };
         
-        this.rotation = { x: 30 * Math.PI / 180, y: 30 * Math.PI / 180, z: 0 };
+        this.rotation = { x: 0, y: 0, z: 0 };
         this.scale = 1.0;
-        
-        this.zBuffer = new Array(this.canvas.width * this.canvas.height);
-        
         this.models = this.createModels();
         this.setupEventListeners();
         this.render();
@@ -103,6 +107,8 @@ class Lighting3DViewer {
             new Vertex(new Point3D(-1, 1, 1))    // 7
         ];
         
+        //U — горизонтальная координата текстуры (0.0 = левый край, 1.0 = правый край
+        //V — вертикальная координата текстуры (0.0 = верхний край, 1.0 = нижний край)
      
         const cubeFaces = [
             {
@@ -151,15 +157,15 @@ class Lighting3DViewer {
         
    
         const tetraVertices = [
-            new Vertex(new Point3D(0, 1, 0)),       // 0 - вершина
-            new Vertex(new Point3D(0.87, -0.5, 0)), // 1
-            new Vertex(new Point3D(-0.87, -0.5, 0)),// 2
-            new Vertex(new Point3D(0, 0, 1.41))     // 3
+            new Vertex(new Point3D(0, 1, 0)),       
+            new Vertex(new Point3D(0.87, -0.5, 0)), 
+            new Vertex(new Point3D(-0.87, -0.5, 0)),
+            new Vertex(new Point3D(0, 0, 1.41))     
         ];
         
         const tetraFaces = [
             {
-                indices: [0, 2, 1], // грань 0-2-1
+                indices: [0, 2, 1],
                 texCoords: [
                     { u: 0.5, v: 0 },
                     { u: 0, v: 1 },
@@ -167,7 +173,7 @@ class Lighting3DViewer {
                 ]
             },
             {
-                indices: [0, 1, 3], // грань 0-1-3
+                indices: [0, 1, 3], 
                 texCoords: [
                     { u: 0.5, v: 0 },
                     { u: 0, v: 1 },
@@ -175,7 +181,7 @@ class Lighting3DViewer {
                 ]
             },
             {
-                indices: [0, 3, 2], // грань 0-3-2
+                indices: [0, 3, 2], 
                 texCoords: [
                     { u: 0.5, v: 0 },
                     { u: 1, v: 1 },
@@ -183,7 +189,7 @@ class Lighting3DViewer {
                 ]
             },
             {
-                indices: [1, 2, 3], // грань 1-2-3
+                indices: [1, 2, 3], 
                 texCoords: [
                     { u: 0, v: 0 },
                     { u: 1, v: 0 },
@@ -345,12 +351,6 @@ class Lighting3DViewer {
         return { r: 1, g: 1, b: 1 };
     }
     
-    clearZBuffer() {
-        for (let i = 0; i < this.zBuffer.length; i++) {
-            this.zBuffer[i] = Number.MAX_VALUE;
-        }
-    }
-    
     drawTriangle(v1, v2, v3, screenV1, screenV2, screenV3, texCoord1, texCoord2, texCoord3) {
         const minX = Math.max(0, Math.floor(Math.min(screenV1.x, screenV2.x, screenV3.x)));
         const maxX = Math.min(this.canvas.width - 1, Math.ceil(Math.max(screenV1.x, screenV2.x, screenV3.x)));
@@ -371,11 +371,9 @@ class Lighting3DViewer {
                 
                 if (lambda1 >= 0 && lambda2 >= 0 && lambda3 >= 0) {
                     const z = lambda1 * screenV1.z + lambda2 * screenV2.z + lambda3 * screenV3.z;
-                    const bufferIndex = y * this.canvas.width + x;
                     
-                    if (z < this.zBuffer[bufferIndex] && z > -10) {
-                        this.zBuffer[bufferIndex] = z;
-                        
+                    // Убрана проверка Z-буфера, просто рисуем пиксель
+                    if (z > -10) { // Проверка только на минимальную глубину
                         let color;
                         
                         if (this.shadingMode === 'gouraud') {
@@ -434,7 +432,7 @@ class Lighting3DViewer {
     render() {
         this.ctx.fillStyle = '#1a1a2e';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.clearZBuffer();
+        // Убран вызов clearZBuffer()
         
         const model = this.models[this.currentModel];
         document.getElementById('faceCount').textContent = model.faces.length;

@@ -52,11 +52,23 @@
                 <label><input type="checkbox" id="texturing"> Enable</label>
                 <select id="textureSelect">
                     <option value="checker">Checker</option>
+                    <option value="gradient">Gradient</option>
                 </select>
             </div>
 
             <div class="control-group">
                 <h3>TRANSFORM</h3>
+
+                <label>Translate X: <span class="range-value" id="translateXValue">0.0</span>
+                    <input type="range" id="translateX" min="-2" max="2" step="0.1" value="0">
+                </label>
+                <label>Translate Y: <span class="range-value" id="translateYValue">0.0</span>
+                    <input type="range" id="translateY" min="-2" max="2" step="0.1" value="0">
+                </label>
+                <label>Translate Z: <span class="range-value" id="translateZValue">0.0</span>
+                    <input type="range" id="translateZ" min="-3" max="3" step="0.1" value="0">
+                </label>
+
                 <label>Rotate X: <span class="range-value" id="rotateXValue">30°</span>
                     <input type="range" id="rotateX" min="0" max="360" value="30">
                 </label>

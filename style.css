@@ -54,3 +54,8 @@ select, input[type="range"] {
     float: right;
     font-size: 10px;
 }
+input[type="file"] {
+    width: 100%;
+    margin: 5px 0;
+    font-size: 11px;
+}

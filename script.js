@@ -81,7 +81,6 @@ class Lighting3DViewer {
         this.currentModel = 'cube';
         this.shadingMode = 'gouraud';
         this.enableTexturing = false;
-        this.textureType = 'checker';
         this.lightPosition = new Point3D(2, 2, 2);
         this.objectColor = { r: 0.8, g: 0.6, b: 0.4 };
         
@@ -96,6 +95,10 @@ class Lighting3DViewer {
         
         this.cameraDistance = 5;
         this.perspective = 500;
+        
+        this.textureImage = null;
+        this.textureCanvas = document.createElement('canvas');
+        this.textureCtx = this.textureCanvas.getContext('2d');
         
         this.models = this.createModels();
         this.setupEventListeners();
@@ -171,11 +174,25 @@ class Lighting3DViewer {
         document.getElementById('shadingMode').addEventListener('change', (e) => {
             this.shadingMode = e.target.value;
         });
-        document.getElementById('texturing').addEventListener('change', (e) => {
-            this.enableTexturing = e.target.checked;
-        });
-        document.getElementById('textureSelect').addEventListener('change', (e) => {
-            this.textureType = e.target.value;
+        
+        document.getElementById('textureFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    this.textureImage = new Image();
+                    this.textureImage.onload = () => {
+                        this.textureCanvas.width = this.textureImage.width;
+                        this.textureCanvas.height = this.textureImage.height;
+                        this.textureCtx.drawImage(this.textureImage, 0, 0);
+                        document.getElementById('fileStatus').textContent = 'Texture loaded: ' + 
+                            this.textureImage.width + 'x' + this.textureImage.height;
+                        this.enableTexturing = true;
+                    };
+                    this.textureImage.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
         });
         
         ['lightX', 'lightY', 'lightZ'].forEach(id => {
@@ -271,20 +288,25 @@ class Lighting3DViewer {
     }
     
     getTextureColor(u, v) {
-        if (this.textureType === 'checker') {
-            const size = 8;
-            const tileU = Math.floor(u * size);
-            const tileV = Math.floor(v * size);
-            return (tileU % 2 === tileV % 2) ? 
-                { r: 1, g: 1, b: 1 } : { r: 0.3, g: 0.3, b: 0.3 };
-        } else if (this.textureType === 'gradient') {
+        if (this.textureImage) {
+            const x = Math.floor(u * (this.textureCanvas.width - 1));
+            const y = Math.floor(v * (this.textureCanvas.height - 1));
+            
+            const imageData = this.textureCtx.getImageData(x, y, 1, 1);
+            const data = imageData.data;
+            
             return {
-                r: u,
-                g: v,
-                b: (1 - u) * (1 - v)
+                r: data[0] / 255,
+                g: data[1] / 255,
+                b: data[2] / 255
             };
         }
-        return { r: 1, g: 1, b: 1 };
+        
+        const size = 8;
+        const tileU = Math.floor(u * size);
+        const tileV = Math.floor(v * size);
+        return (tileU % 2 === tileV % 2) ? 
+            { r: 1, g: 1, b: 1 } : { r: 0.3, g: 0.3, b: 0.3 };
     }
     
     drawTriangle(v1, v2, v3, screenV1, screenV2, screenV3, texCoord1, texCoord2, texCoord3) {

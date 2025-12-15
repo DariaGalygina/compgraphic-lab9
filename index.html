@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Lighting & Texturing</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"> 
 </head>
 <body>
+    
     <div class="container">
         <div>
             <canvas id="renderCanvas" width="800" height="600"></canvas>
@@ -30,10 +31,24 @@
                 <h3>SHADING</h3>
                 <select id="shadingMode">
                     <option value="gouraud">Gouraud (Lambert)</option>
-                    <option value="phong">Phong</option>
+                    <option value="phong" selected>Phong</option>
                 </select>
             </div>
 
+            <div class="control-group">
+                <h3>TOON SHADING</h3>
+                <div style="margin-bottom: 5px;">
+                    <label>
+                        <input type="checkbox" id="toonToggle"> Enable Toon Shading
+                    </label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                    <span style="font-size: 12px;">Bands:</span>
+                    <input type="range" id="toonBands" min="2" max="8" value="4" style="flex: 1;">
+                    <span id="toonBandsValue" style="font-size: 12px; min-width: 20px;">4</span>
+                </div>
+            </div>
+           
             <div class="control-group">
                 <h3>LIGHT POSITION</h3>
                 <label>X: <span class="range-value" id="lightXValue">2.0</span>
@@ -46,7 +61,7 @@
                     <input type="range" id="lightZ" min="-5" max="5" step="0.1" value="2">
                 </label>
             </div>
-
+           
             <div class="control-group">
                 <h3>TEXTURING</h3>
                 <input type="file" id="textureFile" accept="image/*">
@@ -81,6 +96,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js"></script> 
 </body>
 </html>

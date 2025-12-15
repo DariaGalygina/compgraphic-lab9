@@ -61,14 +61,19 @@ class Model3D {
     calculateNormals() {
         this.vertices.forEach(v => v.normal = new Point3D(0, 0, 0));
         this.faces.forEach(face => {
+            if (face.vertexIndices.length < 3) return;
+
             const v0 = this.vertices[face.vertexIndices[0]].position;
             const v1 = this.vertices[face.vertexIndices[1]].position;
             const v2 = this.vertices[face.vertexIndices[2]].position;
+            
             const normal = v1.subtract(v0).cross(v2.subtract(v0)).normalize();
+            
             face.vertexIndices.forEach(idx => {
                 this.vertices[idx].normal = this.vertices[idx].normal.add(normal);
             });
         });
+        
         this.vertices.forEach(v => v.normal = v.normal.normalize());
     }
 }
@@ -79,7 +84,7 @@ class Lighting3DViewer {
         this.ctx = this.canvas.getContext('2d');
         
         this.currentModel = 'cube';
-        this.shadingMode = 'gouraud';
+        this.shadingMode = 'phong';
         this.enableTexturing = false;
         this.lightPosition = new Point3D(2, 2, 2);
         this.objectColor = { r: 0.8, g: 0.6, b: 0.4 };
@@ -88,6 +93,9 @@ class Lighting3DViewer {
         this.specularColor = { r: 1.0, g: 1.0, b: 1.0 };
         this.specularIntensity = 0.8;
         this.shininess = 32;
+
+        this.enableToonShading = false;
+        this.toonBands = 4;
         
         this.rotation = { x: 0, y: 0, z: 0 };
         this.scale = 1.0;
@@ -250,6 +258,22 @@ class Lighting3DViewer {
                 });
             }
         });
+
+        const toonToggle = document.getElementById('toonToggle');
+        if (toonToggle) {
+            toonToggle.addEventListener('change', (e) => {
+                this.enableToonShading = e.target.checked;
+            });
+        }
+
+        const toonBands = document.getElementById('toonBands');
+        const toonBandsValue = document.getElementById('toonBandsValue');
+        if (toonBands && toonBandsValue) {
+            toonBands.addEventListener('input', (e) => {
+                this.toonBands = parseInt(e.target.value);
+                toonBandsValue.textContent = e.target.value;
+            });
+        }
     }
     
     rotatePoint(point, rx, ry, rz) {
@@ -274,23 +298,37 @@ class Lighting3DViewer {
         const lightDir = this.lightPosition.normalize();
         const viewDir = viewDirection.normalize();
         
-        const diffuse = Math.max(normNormal.dot(lightDir), 0);
+        let diffuse = Math.max(normNormal.dot(lightDir), 0);
+        let specular = 0;
         
-        const reflectDir = lightDir.subtract(normNormal.multiply(2 * lightDir.dot(normNormal))).normalize();
-        const specAngle = Math.max(reflectDir.dot(viewDir), 0);
-        const specular = Math.pow(specAngle, this.shininess);
+        if (this.enableToonShading && this.toonBands > 1) {
+            const bands = this.toonBands;
+            diffuse = Math.floor(diffuse * (bands - 1)) / (bands - 1);
+        }
+
+        if (diffuse > 0) {
+            const reflectDir = normNormal.multiply(2 * normNormal.dot(lightDir)).subtract(lightDir).normalize();
+            
+            const specAngle = Math.max(reflectDir.dot(viewDir), 0);
+            
+            specular = this.specularIntensity * Math.pow(specAngle, this.shininess);
+
+            if (this.enableToonShading) {
+                specular = (specular > 0.5) ? this.specularIntensity : 0;
+            }
+        }
         
         return {
             ambient: this.ambient,
             diffuse: diffuse,
-            specular: this.specularIntensity * specular
+            specular: specular
         };
     }
     
     getTextureColor(u, v) {
         if (this.textureImage) {
-            const x = Math.floor(u * (this.textureCanvas.width - 1));
-            const y = Math.floor(v * (this.textureCanvas.height - 1));
+            const x = Math.round(u * (this.textureCanvas.width - 1));
+            const y = Math.round(v * (this.textureCanvas.height - 1));
             
             const imageData = this.textureCtx.getImageData(x, y, 1, 1);
             const data = imageData.data;
@@ -324,12 +362,12 @@ class Lighting3DViewer {
                 if (Math.abs(denom) < 0.0001) continue;
                 
                 const lambda1 = ((screenV2.y - screenV3.y) * (x - screenV3.x) + 
-                                (screenV3.x - screenV2.x) * (y - screenV3.y)) / denom;
+                                 (screenV3.x - screenV2.x) * (y - screenV3.y)) / denom;
                 const lambda2 = ((screenV3.y - screenV1.y) * (x - screenV3.x) + 
-                                (screenV1.x - screenV3.x) * (y - screenV3.y)) / denom;
+                                 (screenV1.x - screenV3.x) * (y - screenV3.y)) / denom;
                 const lambda3 = 1 - lambda1 - lambda2;
                 
-                if (lambda1 >= 0 && lambda2 >= 0 && lambda3 >= 0) {
+                if (lambda1 >= -0.001 && lambda2 >= -0.001 && lambda3 >= -0.001) {
                     let color;
                     
                     if (this.shadingMode === 'gouraud') {
@@ -338,27 +376,29 @@ class Lighting3DViewer {
                         const b = lambda1 * v1.color.b + lambda2 * v2.color.b + lambda3 * v3.color.b;
                         color = { r, g, b };
                     } else {
-                        const nx = lambda1 * v1.normal.x + lambda2 * v2.normal.x + lambda3 * v3.normal.x;
-                        const ny = lambda1 * v1.normal.y + lambda2 * v2.normal.y + lambda3 * v3.normal.y;
-                        const nz = lambda1 * v1.normal.z + lambda2 * v2.normal.z + lambda3 * v3.normal.z;
-                        const interpolatedNormal = new Point3D(nx, ny, nz).normalize();
+                        const interpolatedNormal = new Point3D(
+                            lambda1 * v1.normal.x + lambda2 * v2.normal.x + lambda3 * v3.normal.x,
+                            lambda1 * v1.normal.y + lambda2 * v2.normal.y + lambda3 * v3.normal.y,
+                            lambda1 * v1.normal.z + lambda2 * v2.normal.z + lambda3 * v3.normal.z
+                        ).normalize();
                         
-                        const px = lambda1 * v1.position.x + lambda2 * v2.position.x + lambda3 * v3.position.x;
-                        const py = lambda1 * v1.position.y + lambda2 * v2.position.y + lambda3 * v3.position.y;
-                        const pz = lambda1 * v1.position.z + lambda2 * v2.position.z + lambda3 * v3.position.z;
-                        const position = new Point3D(px, py, pz);
+                        const position = new Point3D(
+                            lambda1 * v1.position.x + lambda2 * v2.position.x + lambda3 * v3.position.x,
+                            lambda1 * v1.position.y + lambda2 * v2.position.y + lambda3 * v3.position.y,
+                            lambda1 * v1.position.z + lambda2 * v2.position.z + lambda3 * v3.position.z
+                        );
                         
                         const viewDir = cameraPos.subtract(position);
                         const phong = this.calculatePhong(interpolatedNormal, viewDir);
                         
                         color = {
-                            r: phong.ambient + 
+                            r: phong.ambient * this.objectColor.r + 
                                 phong.diffuse * this.objectColor.r + 
                                 phong.specular * this.specularColor.r,
-                            g: phong.ambient + 
+                            g: phong.ambient * this.objectColor.g + 
                                 phong.diffuse * this.objectColor.g + 
                                 phong.specular * this.specularColor.g,
-                            b: phong.ambient + 
+                            b: phong.ambient * this.objectColor.b + 
                                 phong.diffuse * this.objectColor.b + 
                                 phong.specular * this.specularColor.b
                         };
@@ -368,6 +408,7 @@ class Lighting3DViewer {
                         const u = lambda1 * texCoord1.u + lambda2 * texCoord2.u + lambda3 * texCoord3.u;
                         const v = lambda1 * texCoord1.v + lambda2 * texCoord2.v + lambda3 * texCoord3.v;
                         const texColor = this.getTextureColor(u, v);
+                        
                         color.r *= texColor.r; 
                         color.g *= texColor.g; 
                         color.b *= texColor.b;
@@ -395,27 +436,30 @@ class Lighting3DViewer {
         if (faceCountElement) faceCountElement.textContent = model.faces.length;
         if (vertexCountElement) vertexCountElement.textContent = model.vertices.length;
         
-        const transformedVertices = model.vertices.map((vertex, i) => {
-            const rotated = this.rotatePoint(vertex.position, this.rotation.x, this.rotation.y, this.rotation.z);
-            const scaled = rotated.multiply(this.scale);
+        const transformedVertices = model.vertices.map((vertex) => {
+            const scaled = vertex.position.multiply(this.scale);
+            const rotated = this.rotatePoint(scaled, this.rotation.x, this.rotation.y, this.rotation.z);
             const translated = new Point3D(
-                scaled.x + this.translation.x,
-                scaled.y + this.translation.y,
-                scaled.z + this.translation.z
+                rotated.x + this.translation.x,
+                rotated.y + this.translation.y,
+                rotated.z + this.translation.z
             );
+            
+            const rotatedNormal = this.rotatePoint(vertex.normal, this.rotation.x, this.rotation.y, this.rotation.z);
             
             return {
                 position: translated,
-                normal: this.rotatePoint(vertex.normal, this.rotation.x, this.rotation.y, this.rotation.z)
+                normal: rotatedNormal
             };
         });
         
         const screenVertices = transformedVertices.map(vertex => {
             const cameraZ = this.cameraDistance;
             const objectZ = vertex.position.z;
-            const zDistance = cameraZ - objectZ;
+            const zDistance = cameraZ - objectZ; 
+            
             const factor = this.perspective / (this.perspective + zDistance);
-            const scaleFactor = 120;
+            const scaleFactor = 120; 
             
             return {
                 x: vertex.position.x * factor * scaleFactor + this.canvas.width / 2,
@@ -425,19 +469,27 @@ class Lighting3DViewer {
         });
         
         const vertexColors = this.shadingMode === 'gouraud' ? 
-            transformedVertices.map((vertex, i) => {
+            transformedVertices.map((vertex) => {
                 const normNormal = vertex.normal.normalize();
                 const lightDir = this.lightPosition.normalize();
-                const diffuse = Math.max(normNormal.dot(lightDir), 0);
+                
+                let diffuse = Math.max(normNormal.dot(lightDir), 0);
                 
                 return {
-                    r: this.ambient + diffuse * this.objectColor.r,
-                    g: this.ambient + diffuse * this.objectColor.g,
-                    b: this.ambient + diffuse * this.objectColor.b
+                    r: this.ambient * this.objectColor.r + diffuse * this.objectColor.r,
+                    g: this.ambient * this.objectColor.g + diffuse * this.objectColor.g,
+                    b: this.ambient * this.objectColor.b + diffuse * this.objectColor.b
                 };
             }) : null;
         
-        model.faces.forEach(face => {
+        const sortedFaces = model.faces.map(face => {
+            const zAvg = face.vertexIndices.reduce((sum, idx) => sum + screenVertices[idx].z, 0) / face.vertexIndices.length;
+            return { face, zAvg };
+        }).sort((a, b) => b.zAvg - a.zAvg);
+
+        sortedFaces.forEach(item => {
+            const face = item.face;
+            
             if (face.vertexIndices.length >= 3) {
                 const pos1 = transformedVertices[face.vertexIndices[0]].position;
                 const pos2 = transformedVertices[face.vertexIndices[1]].position;
@@ -452,71 +504,39 @@ class Lighting3DViewer {
                 
                 if (normal.dot(toCamera) > 0) {
                     if (face.vertexIndices.length === 3) {
-                        const v1 = {
-                            ...transformedVertices[face.vertexIndices[0]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[0]] : null
-                        };
-                        const v2 = {
-                            ...transformedVertices[face.vertexIndices[1]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[1]] : null
-                        };
-                        const v3 = {
-                            ...transformedVertices[face.vertexIndices[2]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[2]] : null
-                        };
-                        
-                        this.drawTriangle(
-                            v1, v2, v3,
-                            screenVertices[face.vertexIndices[0]],
-                            screenVertices[face.vertexIndices[1]],
-                            screenVertices[face.vertexIndices[2]],
-                            face.texCoords[0],
-                            face.texCoords[1],
-                            face.texCoords[2]
-                        );
+                        this._renderTriangle(face.vertexIndices[0], face.vertexIndices[1], face.vertexIndices[2], face.texCoords[0], face.texCoords[1], face.texCoords[2], transformedVertices, screenVertices, vertexColors);
                     } else if (face.vertexIndices.length === 4) {
-                        const v1 = {
-                            ...transformedVertices[face.vertexIndices[0]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[0]] : null
-                        };
-                        const v2 = {
-                            ...transformedVertices[face.vertexIndices[1]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[1]] : null
-                        };
-                        const v3 = {
-                            ...transformedVertices[face.vertexIndices[2]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[2]] : null
-                        };
-                        const v4 = {
-                            ...transformedVertices[face.vertexIndices[3]],
-                            color: this.shadingMode === 'gouraud' ? vertexColors[face.vertexIndices[3]] : null
-                        };
-                        
-                        this.drawTriangle(
-                            v1, v2, v3,
-                            screenVertices[face.vertexIndices[0]],
-                            screenVertices[face.vertexIndices[1]],
-                            screenVertices[face.vertexIndices[2]],
-                            face.texCoords[0],
-                            face.texCoords[1],
-                            face.texCoords[2]
-                        );
-                        
-                        this.drawTriangle(
-                            v1, v3, v4,
-                            screenVertices[face.vertexIndices[0]],
-                            screenVertices[face.vertexIndices[2]],
-                            screenVertices[face.vertexIndices[3]],
-                            face.texCoords[0],
-                            face.texCoords[2],
-                            face.texCoords[3]
-                        );
+                        this._renderTriangle(face.vertexIndices[0], face.vertexIndices[1], face.vertexIndices[2], face.texCoords[0], face.texCoords[1], face.texCoords[2], transformedVertices, screenVertices, vertexColors);
+                        this._renderTriangle(face.vertexIndices[0], face.vertexIndices[2], face.vertexIndices[3], face.texCoords[0], face.texCoords[2], face.texCoords[3], transformedVertices, screenVertices, vertexColors);
                     }
                 }
             }
         });
         
         requestAnimationFrame(() => this.render());
+    }
+
+    _renderTriangle(i1, i2, i3, tc1, tc2, tc3, transformedVertices, screenVertices, vertexColors) {
+        const v1 = {
+            ...transformedVertices[i1],
+            color: this.shadingMode === 'gouraud' ? vertexColors[i1] : null
+        };
+        const v2 = {
+            ...transformedVertices[i2],
+            color: this.shadingMode === 'gouraud' ? vertexColors[i2] : null
+        };
+        const v3 = {
+            ...transformedVertices[i3],
+            color: this.shadingMode === 'gouraud' ? vertexColors[i3] : null
+        };
+        
+        this.drawTriangle(
+            v1, v2, v3,
+            screenVertices[i1],
+            screenVertices[i2],
+            screenVertices[i3],
+            tc1, tc2, tc3
+        );
     }
 }
 
